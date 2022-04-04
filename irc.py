@@ -503,7 +503,7 @@ class OsuIrc:
             if room.get("bot_mode") == 1:
                 self.send_private(
                     room.get("room_id"),
-                    f"NoHost | {room.get(min)} -> {room.get('max')} | peepee random map | Commands: start <seconds>, stop, queue, skip |  ",
+                    f"NoHost | {room.get('min')} -> {room.get('max')} | peepee random map | Commands: start <seconds>, stop, queue, skip |  ",
                 )
 
     def on_receive(self, data: dict) -> None:
