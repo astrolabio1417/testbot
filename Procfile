@@ -1,0 +1,1 @@
+worker: python irc.py
