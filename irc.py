@@ -649,13 +649,17 @@ if __name__ == "__main__":
     import logging
 
     logname = f"logs{datetime.now().strftime('%d-%m-%y %H-%M-%S')}.log"
+    formatter = "%(asctime)s : %(name)s : %(levelname)s = %(message)s"
     logging.basicConfig(
         filename=logname,
-        format="%(asctime)s %(message)s",
+        format=formatter,
         filemode="w",
     )
-    logger = logging.getLogger()
+    ch = logging.StreamHandler()
+    ch.setLevel(logging.DEBUG)
+    logger = logging.getLogger("irc.py")
     logger.setLevel(logging.DEBUG)
+    logger.addHandler(ch)
 
     config = get_config()
     irc = OsuIrc(
