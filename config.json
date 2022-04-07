@@ -3,7 +3,7 @@
   "password": "b5ccfefa",
   "rooms": [
     {
-      "name": "5.0 - 6.0 | NoHost | Random | Test",
+      "name": "5.0 - 6.0 | NoHost | AutoPick",
       "password": "",
       "min": 5.0,
       "max": 6.0,
@@ -14,7 +14,7 @@
       "current_beatmap": 24854
     },
     {
-      "name": "6.0 - 7.5 | NoHost | Random | Test",
+      "name": "6.0 - 7.5 | NoHost | AutoPick",
       "password": "",
       "min": 6.0,
       "max": 7.5,
