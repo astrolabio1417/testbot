@@ -3,11 +3,10 @@ import json
 import re
 import socket
 from time import sleep
-
+import requests
 from beatmaps import filter_map_by_ratings
 
 logger = None
-
 team_mode = {0: "HeadToHead", 1: "TagCoop", 2: "TeamVs", 3: "TagTeamVs"}
 score_mode = {0: "Score", 1: "Accuracy", 2: "Combo", 3: "ScoreV2"}
 play_mode = {0: "osu!", 1: "Taiko", 2: "Catch the Beat", 3: "osu!Mania"}
@@ -87,13 +86,6 @@ class OsuIrc:
         self.stop = True
         self.socket.close()
 
-    def check_beatmap(self, room: dict, beatmap_id: int):
-        room["current_beatmap"] = beatmap_id
-
-        self.send_private(
-            room.get("room_id"), f"!mp map {beatmap_id} {room.get('play_mode')}"
-        )
-
     def send(self, message: str) -> None:
         sleep(0.50)
         self.socket.send(f"{message}\n".encode())
@@ -108,18 +100,13 @@ class OsuIrc:
         return username.strip().replace(" ", "_")
 
     def message_parser(self, message: str) -> dict:
-        # message: str
-        # return: dict {sender, message, type: none | private | room, room_id}
-
-        # test
-        # :username!cho@ppy.sh PRIVMSG #mp_99211675 : message -> room
-        # :BanchoBot!cho@ppy.sh PRIVMSG username :Created the tournament match https://osu.ppy.sh/mp/99999999 room 1 -> private
-        # :cho.ppy.sh message -> server
+        # return: {type: string, sender: string, message: string, room_id: string}
         if message.startswith(":cho.ppy.sh"):
             return {
+                "type": "server",
                 "sender": "cho.ppy.sh",
                 "message": message,
-                "type": "server",
+                "room_id": None,
             }
 
         if "PRIVMSG" in message:
@@ -135,13 +122,18 @@ class OsuIrc:
                 return {
                     "type": "room",
                     "sender": sender,
-                    "room_id": room_id,
                     "message": sender_message,
+                    "room_id": room_id,
                 }
             else:
-                return {"message": sender_message, "type": "private", "sender": sender}
+                return {
+                    "type": "private",
+                    "sender": sender,
+                    "message": sender_message,
+                    "room_id": None,
+                }
 
-        return {"message": message, "type": None}
+        return {"type": None, "sender": None, "message": message, "room_id": None}
 
     def get_room(self, room_name=None, room_id=None) -> dict:
         for room in self.rooms:
@@ -160,14 +152,14 @@ class OsuIrc:
                 self.send(f"JOIN {room.get('room_id')}")
 
     def setup_room_settings(self, room: dict) -> None:
-        logger.info(f"Setting up Room {room.get('name')} {room.get('room_id')}")
+        logger.info(f"~ Setting up Room {room.get('name')} | {room.get('room_id')}")
 
         if room:
             self.send_private(room.get("room_id"), f"!mp name {room.get('name')}")
             self.send_private(
                 room.get("room_id"), f"!mp password {room.get('password')}"
             )
-            sleep(2)
+            sleep(1)
             self.send_private(
                 room.get("room_id"),
                 f"!mp set {room.get('team_mode')} {room.get('score_mode')} {room.get('room_size', 16)}",
@@ -175,36 +167,25 @@ class OsuIrc:
             self.send_private(room.get("room_id"), "!mp mods Freemod")
 
     def on_skip_rotate(self, room: dict):
-        if room.get("bot_mode") == 1:
+        if room.get("bot_mode") == 0 and room.get("users"):
+            room["users"] = room["users"][1:] + room["users"][0:1]
+            self.send_private(room.get("room_id"), f"!mp host {room.get('users')[0]}")
+        elif room.get("bot_mode") == 1 and room.get("beatmaps"):
             self.send_private(
                 room.get("room_id"),
                 f"!mp map {room.get('beatmaps')[0].get('b')} {room.get('play_mode')}",
             )
             room["beatmaps"] = room["beatmaps"][1:] + room["beatmaps"][0:1]
 
-        elif room.get("bot_mode") == 0:
-            if room["users"]:
-                room["users"] = room["users"][1:] + room["users"][0:1]
-                self.send_private(
-                    room.get("room_id"), f"!mp host {room.get('users')[0]}"
-                )
-
-        if len(room.get("users")) > 1:
-            self.send_private(room.get("room_id"), "!mp start 60")
-
     def get_beatmap_info(self, url: str) -> dict | None:
-        logger.info(f"~Fetching: {url}")
-        import requests
-
+        logger.info(f"~ Fetching url: {url}")
         res = None
 
         try:
             res = requests.get(url, timeout=(10, 10))
-        except requests.exceptions.HTTPError as err:
-            logger.critical(f"!Fetching beatmap info error! | {err}")
-            return
-
-        logger.info(f"~Fetch status, {res.ok} | {res.status_code}")
+            logger.info(f"~ Fetch status|code: {res.ok} | {res.status_code}")
+        except Exception as err:
+            logger.critical(f"~ Fetch beatmap info error! | {err}")
 
         if res.ok:
             beatmap_info = re.search('\{"artist".+', res.text).group(0)
@@ -218,6 +199,9 @@ class OsuIrc:
         logger.error("~Beatmap failed to fetch")
 
     def links(self, title: str, beatmap_id: int) -> str:
+        if not beatmap_id:
+            return ""
+
         return f"[https://osu.ppy.sh/beatmapsets/{beatmap_id} {title}] [https://beatconnect.io/b/{beatmap_id}/ beatconnect]"
 
     def get_queue(self, room: dict) -> str:
@@ -229,13 +213,13 @@ class OsuIrc:
                     f"[https://osu.ppy.sh/b/{beatmap.get('b')} {beatmap.get('t')}]"
                 )
 
-            return "  ".join(message)
+            return ", ".join(message)
         elif room.get("bot_mode") == 0:
             return ", ".join(room.get("users")[0:5])
 
     def on_room_created(self, room_name: str, room_id: str):
         if room_name and room_id:
-            logger.info(f"Room Created {room_id} {room_name}")
+            logger.info(f"~ Room Created {room_id} | {room_name}")
             room = self.get_room(room_name=room_name)
 
             if room:
@@ -244,24 +228,29 @@ class OsuIrc:
                 self.on_skip_rotate(room=room)
 
     def on_room_closed(self, room: dict):
-        room["created"] = room["connected"] = room["connected"] = False
+        logger.warning(f"~ Room closed | {room.get('name')}")
+        room["created"] = room["connected"] = False
         room["users"] = []
 
     def on_user_joined(self, room: dict, user: str) -> None:
         logger.info(f"~ {user} joined the room {room.get('room_id')}")
 
-        if user not in room["users"]:
+        if user not in room.get("users"):
             room["users"].append(user)
-            logger.info(f"{user} added to {room.get('users')}")
+            logger.info(f"~ {user} added to {room.get('name')} | {room.get('users')}")
 
-        if len(room.get("users")) == 1 and room.get("bot_mode") == 0:
+        if room.get("bot_mode") == 0 and len(room.get("users")) == 1:
             self.on_skip_rotate(room=room)
 
     def on_user_left(self, room: dict, user: str) -> None:
         logger.info(f"~ {user} left the room {room.get('room_id')}")
 
-        # host quit
-        if room.get("users")[0] == user and room.get("bot_mode") == 0:
+        # autohost | rotate on host leave
+        if (
+            room.get("bot_mode") == 0
+            and room.get("users")
+            and room.get("users")[0] == user
+        ):
             self.on_skip_rotate(room=room)
 
         if user in room.get("users"):
@@ -270,9 +259,9 @@ class OsuIrc:
     def on_host_changed(self, room: dict, user: str) -> None:
         logger.info(f"~ room {room.get('room_id')} changed host to {user}")
 
-        if room.get("bot_mode") == 0:
+        if room.get("bot_mode") == 0 and room.get("users"):
             # host gave host to the second user in queue
-            if len(room.get("users")) >= 2 and user == room.get("users")[1]:
+            if len(room.get("users")) > 1 and user == room.get("users")[1]:
                 logger.info("~ host gave host to the second user in queue")
                 room["users"] = room["users"][1:] + room["users"][0:1]
             # host gave the host to random user
@@ -301,17 +290,6 @@ class OsuIrc:
         logger.info(f"~ room {room.get('room_id')} Match ready")
         self.send_private(room.get("room_id"), "!mp start")
 
-    def on_beatmap_changed_to(
-        self, room: dict, title: str, version: str, url: str, beatmap_id: int
-    ) -> None:
-        # beatmap manually pick by user
-        logger.info(f"~Beatmap change to {title}")
-        self.set_room_beatmap(
-            room=room,
-            url=url,
-            version=version,
-        )
-
     def send_beatmap_violation(self, room: dict, message: str, error: str) -> None:
         self.send_private(
             room.get("room_id"),
@@ -334,19 +312,11 @@ class OsuIrc:
             )
             return
 
-        import requests
-
         try:
             response = requests.get(url, timeout=(10, 10))
-        except requests.exceptions.HTTPError as err:
-            self.send_beatmap_violation(room, err, "HttpError")
-            return
-        except requests.exceptions.ReadTimeout as err:
-            logger.critical(f"~ Timeout error: {err}")
-            self.send_private(
-                room.get("room_id"),
-                f'ReadTimeout | Beatmap Checking error. Slow internet connection... | [https://beatconnect.io/b/{url.split("/")[-1]}/ Beatconnect]',
-            )
+        except Exception as err:
+            logger.critical(f"~ Fetch Error: {err}")
+            self.send_beatmap_violation(room, "Fetching beatmap error!", "HttpError")
             return
 
         if not response.ok:
@@ -416,6 +386,17 @@ class OsuIrc:
             "NotFound",
         )
 
+    def on_beatmap_changed_to(
+        self, room: dict, title: str, version: str, url: str, beatmap_id: int
+    ) -> None:
+        # beatmap manually pick by user
+        logger.info(f"~ Beatmap change to {title} | {url}")
+        self.set_room_beatmap(
+            room=room,
+            url=url,
+            version=version,
+        )
+
     def on_changed_beatmap_to(
         self, room: dict, title: str, url: str, beatmap_id: int
     ) -> None:
@@ -430,7 +411,7 @@ class OsuIrc:
             )
 
     def on_error(self, error):
-        logger.info(error)
+        logger.error(error)
 
     def on_disconnected(self):
         for room in self.rooms:
@@ -457,10 +438,10 @@ class OsuIrc:
         roles: list,
     ) -> None:
         logger.info(
-            f"~ room {room.get('room_id')} Slot: {slot} Status: {status} {user} [ID: {user_id}] roles: {roles}"
+            f"~ Room {room.get('room_id')} | Slot {slot} | status {status} | user {user} | ID {user_id} | roles {roles}"
         )
 
-        if user not in room["users"]:
+        if user not in room.get("users"):
             room["users"].append(user)
         room["check_users"].append(user)
 
@@ -479,7 +460,9 @@ class OsuIrc:
         total = round(len(room.get("users")) / 2)
 
         if room.get("skip") >= total or (
-            room.get("bot_mode") == 0 and sender == room.get("users")[0]
+            room.get("bot_mode") == 0
+            and room.get("users")
+            and sender == room.get("users")[0]
         ):
             self.on_skip_rotate(room=room)
             return
@@ -512,7 +495,7 @@ class OsuIrc:
             if room.get("bot_mode") == 1:
                 self.send_private(
                     room.get("room_id"),
-                    f"NoHost | {room.get('min')} -> {room.get('max')} | peepee random map | Commands: start <seconds>, stop, queue, skip |  ",
+                    f"NoHost | {room.get('min')} -> {room.get('max')} | randomMap@osu-pps | Commands: start <seconds>, stop, queue, skip",
                 )
 
     def on_receive(self, data: dict) -> None:
@@ -650,12 +633,8 @@ class OsuIrc:
                 # unfinished message
                 if lines:
                     buffer = lines[-1]
-
-            except TimeoutError:
-                logger.error("~ Timeout Error!")
-                self.on_disconnected()
-            except socket.gaierror:
-                logger.error("~ Connection Error!")
+            except Exception as err:
+                logger.error(f"~ App Error error: {err}")
                 self.on_disconnected()
 
 
