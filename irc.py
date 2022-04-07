@@ -181,12 +181,16 @@ class OsuIrc:
                 f"!mp map {room.get('beatmaps')[0].get('b')} {room.get('play_mode')}",
             )
             room["beatmaps"] = room["beatmaps"][1:] + room["beatmaps"][0:1]
+
         elif room.get("bot_mode") == 0:
             if room["users"]:
                 room["users"] = room["users"][1:] + room["users"][0:1]
                 self.send_private(
                     room.get("room_id"), f"!mp host {room.get('users')[0]}"
                 )
+
+        if len(room.get("users")) > 1:
+            self.send_private(room.get("room_id"), "!mp start 60")
 
     def get_beatmap_info(self, url: str) -> dict | None:
         logger.info(f"~Fetching: {url}")
