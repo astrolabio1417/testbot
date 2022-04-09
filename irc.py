@@ -44,7 +44,8 @@ class OsuIrc:
         for room in self.rooms:
             room["name"] = room.get("name").strip()
             room["connected"] = room["created"] = room["configured"] = False
-            room["total_users"] = room["skip"] = 0
+            room["total_users"] = 00
+            room["skip"] = []
             room["users"] = []
             room["check_users"] = []
             room["current_beatmap"] = room.get("current_beatmap", None)
@@ -177,6 +178,8 @@ class OsuIrc:
             )
             room["beatmaps"] = room["beatmaps"][1:] + room["beatmaps"][0:1]
 
+        room["skip"] = []
+
     def get_beatmap_info(self, url: str) -> dict | None:
         logger.info(f"~ Fetching url: {url}")
         res = None
@@ -258,6 +261,7 @@ class OsuIrc:
 
     def on_host_changed(self, room: dict, user: str) -> None:
         logger.info(f"~ room {room.get('room_id')} changed host to {user}")
+        room["skip"] = []
 
         if room.get("bot_mode") == 0 and room.get("users"):
             # host gave host to the second user in queue
@@ -273,6 +277,7 @@ class OsuIrc:
 
     def on_match_started(self, room: dict) -> None:
         logger.info(f"~ room {room.get('room_id')} Match started")
+        room["skip"] = []
 
         if room.get("bot_mode") == 0:
             self.on_skip_rotate(room=room)
@@ -401,6 +406,7 @@ class OsuIrc:
         self, room: dict, title: str, url: str, beatmap_id: int
     ) -> None:
         logger.info(f"~Change beatmap to {title} | {url} | {beatmap_id}")
+        room["skip"] = []
         room["current_beatmap"] = beatmap_id
         beatmap = self.get_beatmap_info(url=url)
 
@@ -456,10 +462,14 @@ class OsuIrc:
         room["total_users"] = players
 
     def on_skip(self, room: dict, sender: str) -> None:
-        room["skip"] += 1
+        if sender in room.get("skip"):
+            return
+
+        room["skip"].append(sender)
+        current_votes = len(room.get("users"))
         total = round(len(room.get("users")) / 2)
 
-        if room.get("skip") >= total or (
+        if current_votes >= total or (
             room.get("bot_mode") == 0
             and room.get("users")
             and sender == room.get("users")[0]
@@ -468,7 +478,7 @@ class OsuIrc:
             return
 
         self.send_private(
-            room.get("room_id"), f"Skip voting: {room.get('skip')}/{total}"
+            room.get("room_id"), f"Skip voting: {current_votes} / {total}"
         )
 
     def on_room_message(self, room: dict, sender: str, message: str) -> None:
@@ -518,6 +528,7 @@ class OsuIrc:
                 return
 
             if sender == "BanchoBot":
+                logger.debug(f"{room.get('skip')}")
                 logger.info(f"{type}: {message}")
                 if message == "Closed the match":
                     self.on_room_closed(room=room)
@@ -528,7 +539,6 @@ class OsuIrc:
                     user = self.username_parser(message.split(" left the game.")[0])
                     self.on_user_left(room=room, user=user)
                 elif message.endswith(" became the host."):
-                    room["skip"] = 0
                     user = self.username_parser(message.split(" became the host.")[0])
                     self.on_host_changed(room=room, user=user)
                 elif message == "The match has started!":
