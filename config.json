@@ -3,10 +3,10 @@
   "password": "b5ccfefa",
   "rooms": [
     {
-      "name": "5.0 - 6.0 | NoHost | AutoPick",
+      "name": "5.5 - 7.0 | NoHost | Auto Pick",
       "password": "",
-      "min": 5.0,
-      "max": 6.0,
+      "min": 5.5,
+      "max": 7.0,
       "play_mode": 0,
       "team_mode": 0,
       "score_mode": 0,
