@@ -10,7 +10,7 @@ logger = None
 team_mode = {0: "HeadToHead", 1: "TagCoop", 2: "TeamVs", 3: "TagTeamVs"}
 score_mode = {0: "Score", 1: "Accuracy", 2: "Combo", 3: "ScoreV2"}
 play_mode = {0: "osu!", 1: "Taiko", 2: "Catch the Beat", 3: "osu!Mania"}
-bot_mode = {0: "AutoHost", 1: "AutoRoom"}
+bot_mode = {0: "AutoHost", 1: "AutoPick"}
 valid_roles = [
     "Host",
     "TeamBlue",
