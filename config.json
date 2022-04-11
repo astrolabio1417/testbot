@@ -4,7 +4,7 @@
   "rooms": [
     {
       "name": "5.5 - 7.0 | NoHost | Auto Pick",
-      "password": "",
+      "password": "a",
       "min": 5.5,
       "max": 7.0,
       "play_mode": 0,
