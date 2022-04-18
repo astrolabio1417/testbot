@@ -3,14 +3,15 @@
   "password": "b5ccfefa",
   "rooms": [
     {
-      "name": "5.5 - 7.0 | NoHost | Auto Pick",
-      "password": "a",
-      "min": 5.5,
-      "max": 7.0,
+      "name": "5.0 - 6.0 | NoHost | Auto Pick Map",
+      "password": "test",
+      "min": 5.0,
+      "max": 6.0,
       "play_mode": 0,
       "team_mode": 0,
       "score_mode": 0,
       "bot_mode": 1,
+      "beatmapset_filename": "std-5to6star-9ar-3to7mins.json",
       "current_beatmap": 24854
     }
   ]

@@ -1,5 +1,7 @@
 from datetime import datetime
+import errno
 import json
+import os
 import re
 import socket
 from time import sleep
@@ -51,18 +53,25 @@ class OsuIrc:
             room["current_beatmap"] = room.get("current_beatmap", None)
 
             if room.get("bot_mode") == 1:
-                import random
+                self.load_beatmapset(room=room)
 
-                logger.info(
-                    f"~ {room.get('name')} | Auto Pick Map Room | {room.get('min')} -> {room.get('max')}"
-                )
-                beatmaps = filter_map_by_ratings(
-                    min=room.get("min", 0), max=room.get("max", 10)
-                )
-                logger.info(f"~ {len(beatmaps)} Total Beatmaps!")
+    def load_beatmapset(self, room: dict):
+        import random
 
-                random.shuffle(beatmaps)
-                room["beatmaps"] = beatmaps
+        beatmaps = []
+
+        if not room.get("beatmapset_filename"):
+            raise ValueError("beatmapset_filename is required!")
+
+        with open("beatmapsets/" + room.get("beatmapset_filename"), "r") as f:
+            beatmaps = json.loads(f.read())
+
+        logger.info(
+            f"~ {room.get('name')} | Auto Pick Map Room | {room.get('min')} -> {room.get('max')} | {len(beatmaps)} Total Beatmaps!"
+        )
+
+        random.shuffle(beatmaps)
+        room["beatmaps"] = beatmaps
 
     def connect(self, timeout=5.0) -> bool:
         self.socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
@@ -174,7 +183,7 @@ class OsuIrc:
         elif room.get("bot_mode") == 1 and room.get("beatmaps"):
             self.send_private(
                 room.get("room_id"),
-                f"!mp map {room.get('beatmaps')[0].get('b')} {room.get('play_mode')}",
+                f"!mp map {room.get('beatmaps')[0].get('beatmap_id')} {room.get('play_mode')}",
             )
             room["beatmaps"] = room["beatmaps"][1:] + room["beatmaps"][0:1]
 
@@ -213,7 +222,7 @@ class OsuIrc:
 
             for beatmap in room.get("beatmaps")[0:5]:
                 message.append(
-                    f"[https://osu.ppy.sh/b/{beatmap.get('b')} {beatmap.get('t')}]"
+                    f"[https://osu.ppy.sh/b/{beatmap.get('beatmap_id')} {beatmap.get('title')}]"
                 )
 
             return ", ".join(message)
@@ -494,7 +503,9 @@ class OsuIrc:
         elif message == "!stop":
             self.send_private(room.get("room_id"), "!mp aborttimer")
         elif message == "!users":
-            self.send_private(room.get("room_id"), f"Users: {room.get('users')}")
+            self.send_private(
+                room.get("room_id"), f"Users: {', '.join(room.get('users', []))}"
+            )
         elif message == "!skip":
             self.on_skip(room=room, sender=sender)
         elif message == "!queue":
@@ -505,7 +516,7 @@ class OsuIrc:
             if room.get("bot_mode") == 1:
                 self.send_private(
                     room.get("room_id"),
-                    f"NoHost | {room.get('min')} -> {room.get('max')} | randomMap@osu-pps | Commands: start <seconds>, stop, queue, skip",
+                    f"NoHost | {room.get('min')} -> {room.get('max')} | Commands: start <seconds>, stop, queue, skip",
                 )
 
     def on_receive(self, data: dict) -> None:
@@ -629,7 +640,6 @@ class OsuIrc:
                     return
 
                 self.check_rooms()
-
                 message = self.receive()
 
                 if not message:
