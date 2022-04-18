@@ -3,8 +3,8 @@
   "password": "b5ccfefa",
   "rooms": [
     {
-      "name": "5.0 - 6.0 | NoHost | Auto Pick Map",
-      "password": "test",
+      "name": "5.0 - 6.0 | 3-7minutes | NoHost | Auto Pick Map",
+      "password": "",
       "min": 5.0,
       "max": 6.0,
       "play_mode": 0,
